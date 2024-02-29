@@ -5,13 +5,13 @@ from datetime import datetime
 # Initialize the EC2 client
 ec2_client = boto3.client('ec2')
 current_time = datetime.now()
-age_threshold = 90
+AGE_THRESHOLD = int(os.getenv('AGE_THRESHOLD', 90)) # If a value is not provide, in the variable, it defualts to 90 days
 
 def send_html_email(orphan_snapshot_ids,context):
     region_name = context.invoked_function_arn.split(":")[3]
     account_id = context.invoked_function_arn.split(":")[4]
-    source_email_ids="eddiedanny2000@yahoo.com"
-    destination_email_ids=["eddiedanny2000@yahoo.com"]
+    SOURCE_EMAIL_ID = os.getenv('SOURCE_EMAIL_IDS')
+    DESTINATION_EMAIL_IDS = os.getenv('DESTINATION_EMAIL_IDS').split(",") # We are accepting a list of emails
     ses_client = boto3.client("ses")
     CHARSET = "UTF-8"
     orphan_snapshot_ids_html = ""
@@ -20,7 +20,7 @@ def send_html_email(orphan_snapshot_ids,context):
     HTML_EMAIL_CONTENT = """
         <html>
             <head></head>
-            <h2 style='text-align:left'>Please find list of orphan snapshots without volume attached </h2>
+            <h2 style='text-align:left'>Please find list of snapshots without volume attached </h2>
             <p>Account number : {}</p>
             <p>Region : {}</p>
             <p>Instance IDs :</p>
@@ -31,7 +31,7 @@ def send_html_email(orphan_snapshot_ids,context):
 
     response = ses_client.send_email(
         Destination={
-            "ToAddresses": destination_email_ids
+            "ToAddresses": DESTINATION_EMAIL_IDS
         },
         Message={
             "Body": {
@@ -45,7 +45,7 @@ def send_html_email(orphan_snapshot_ids,context):
                 "Data": "Orphan Snapshots to Delete",
             },
         },
-        Source=source_email_ids,
+        Source=SOURCE_EMAIL_ID,
     )
     print(response)
 
@@ -58,7 +58,7 @@ def get_orphan_snapshots(context):
         snapshot_start_time_str = snapshot_start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
         snapshot_start_datetime = datetime.strptime(snapshot_start_time_str, '%Y-%m-%dT%H:%M:%S.%fZ')
         snapshot_age = (current_time - snapshot_start_datetime).days
-        if snapshot_age > age_threshold:
+        if snapshot_age > AGE_THRESHOLD:
             try:
                 volume_id = snapshot.get('VolumeId')
                 ec2_client.describe_volumes(VolumeIds=[volume_id])
@@ -90,14 +90,7 @@ def delete_orphan_snapshots(snapshots):
 
 def lambda_handler(event, context):
     get_orphan_snapshots(context)
-    
-### To Delete the snapshots, uncomment below two lines of code  
+
     # orphan_snaps = get_orphan_snapshots()
+
     # delete_orphan_snapshots(orphan_snaps)
-
-## To test from your cli, uncomment below code
-#     orphan_snaps = get_orphan_snapshots()
-#     print(orphan_snaps)
-
-# if __name__ == "__main__":
-#     lambda_handler(event="", context="")
